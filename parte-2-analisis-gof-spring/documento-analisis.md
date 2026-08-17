@@ -1,10 +1,10 @@
 # Análisis de Patrones de Diseño GoF en Spring Framework
 
-**Nombre completo:** José Yesid Calvo Quintero
-**Código estudiantil:** 02240131050
-**Curso:** Patrones de Diseño de Software
-**Unidad:** Unidad 1 — Fundamentos de Patrones de Diseño
-**Fecha:** 17/08/26
+**Nombre completo:** José Yesid Calvo Quintero <br>
+**Código estudiantil:** 02240131050 <br>
+**Curso:** Patrones de Diseño de Software <br>
+**Unidad:** Unidad 1 — Fundamentos de Patrones de Diseño <br>
+**Fecha:** 17/08/2026 <br>
 
 ---
 
@@ -75,33 +75,34 @@ En una aplicación Spring Boot es habitual necesitar comportamientos transversal
 
 ### 3.4 Evidencia de código
 
-Un extracto simplificado y comentado que ilustra el mecanismo de interceptación es el siguiente (adaptado por el estudiante a partir del código fuente original; Spring Team, s.f.):
+El siguiente es un extracto real del método `invoke(...)`, tal como aparece en el código fuente actual de `JdkDynamicAopProxy` (Spring Team, s.f.). Se omiten, y se marcan explícitamente, las ramas iniciales que manejan casos especiales (`equals()`, `hashCode()`, `exposeProxy`), ya que no son necesarias para explicar el mecanismo central del patrón Proxy:
 
 ```java
-// org.springframework.aop.framework.JdkDynamicAopProxy
-final class JdkDynamicAopProxy implements AopProxy, InvocationHandler, Serializable {
+@Override
+public @Nullable Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+    // (líneas omitidas: casos especiales de equals(), hashCode() y exposeProxy)
+    target = targetSource.getTarget();
+    Class<?> targetClass = (target != null ? target.getClass() : null);
 
-    private final AdvisedSupport advised; // configuración de advices/interceptores
+    // Get the interception chain for this method.
+    List<Object> chain = this.advised.getInterceptorsAndDynamicInterceptionAdvice(method, targetClass);
 
-    // Punto único de entrada de TODAS las llamadas al bean proxied.
-    @Override
-    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        // 1. Obtiene el objeto real (target) detrás del proxy.
-        Object target = this.advised.getTargetSource().getTarget();
-
-        // 2. Construye la cadena de interceptores (p. ej. transacción, seguridad).
-        List<Object> chain =
-            this.advised.getInterceptorsAndDynamicInterceptionAdvice(method, target.getClass());
-
-        // 3. Ejecuta la cadena y, al final, delega en el método real del target.
-        MethodInvocation invocation =
-            new ReflectiveMethodInvocation(proxy, target, method, args, target.getClass(), chain);
-        return invocation.proceed();
+    if (chain.isEmpty()) {
+        Object[] argsToUse = AopProxyUtils.adaptArgumentsIfNecessary(method, args);
+        retVal = AopUtils.invokeJoinpointUsingReflection(target, method, argsToUse);
     }
+    else {
+        // We need to create a method invocation...
+        MethodInvocation invocation =
+                new ReflectiveMethodInvocation(proxy, target, method, args, targetClass, chain);
+        // Proceed to the joinpoint through the interceptor chain.
+        retVal = invocation.proceed();
+    }
+    return retVal;
 }
 ```
 
-Este fragmento confirma que el proxy no contiene lógica de negocio propia: su única responsabilidad es interceptar la llamada, ejecutar el comportamiento adicional configurado y delegar en el objeto real.
+Este fragmento confirma que el proxy no contiene lógica de negocio propia: obtiene el objeto real (`target`), calcula la cadena de interceptores configurada para ese método y, si existen advices, delega la ejecución en `ReflectiveMethodInvocation`, que finalmente invoca al objeto real a través de `proceed()`. Si no hay advices configurados, invoca directamente al target por reflexión, evitando el costo de crear un objeto de invocación innecesario.
 
 ### 3.5 Principio SOLID asociado
 
@@ -127,29 +128,25 @@ Trabajar con JDBC "a mano" obliga a repetir, en cada operación de acceso a dato
 
 ### 4.4 Evidencia de código
 
-Un extracto simplificado y comentado que ilustra el esqueleto fijo del algoritmo es el siguiente (adaptado por el estudiante a partir del código fuente original; Spring Team, s.f.):
+El siguiente es un extracto real del método privado `execute(StatementCallback, boolean)` de `JdbcTemplate`, tal como aparece en el código fuente actual (Spring Team, s.f.; VMware, Inc., 2024a). Se omite, y se marca explícitamente, el detalle de liberación temprana de la conexión dentro del bloque `catch`, ya que no es necesario para explicar el esqueleto fijo del algoritmo:
 
 ```java
-// org.springframework.jdbc.core.JdbcTemplate
-public class JdbcTemplate extends JdbcAccessor implements JdbcOperations {
-
-    // Paso fijo del algoritmo: obtener conexión, crear Statement,
-    // manejar excepciones y liberar recursos SIEMPRE de la misma forma.
-    public <T> T execute(StatementCallback<T> action) throws DataAccessException {
-        Connection con = DataSourceUtils.getConnection(obtainDataSource());
-        Statement stmt = null;
-        try {
-            stmt = con.createStatement();
-            applyStatementSettings(stmt);
-
-            // Paso variable: delega en el callback que el desarrollador implementó.
-            T result = action.doInStatement(stmt);
-            return result;
-        }
-        catch (SQLException ex) {
-            throw translateException("StatementCallback", getSql(action), ex);
-        }
-        finally {
+private <T extends @Nullable Object> T execute(StatementCallback<T> action, boolean closeResources) throws DataAccessException {
+    Connection con = DataSourceUtils.getConnection(obtainDataSource());
+    Statement stmt = null;
+    try {
+        stmt = con.createStatement();
+        applyStatementSettings(stmt);
+        T result = action.doInStatement(stmt);
+        handleWarnings(stmt);
+        return result;
+    }
+    catch (SQLException ex) {
+        // (líneas omitidas: liberación temprana de la conexión y traducción del SQL de error)
+        throw translateException("StatementCallback", sql, ex);
+    }
+    finally {
+        if (closeResources) {
             JdbcUtils.closeStatement(stmt);
             DataSourceUtils.releaseConnection(con, getDataSource());
         }
@@ -157,14 +154,7 @@ public class JdbcTemplate extends JdbcAccessor implements JdbcOperations {
 }
 ```
 
-```java
-// org.springframework.jdbc.core.StatementCallback
-@FunctionalInterface
-public interface StatementCallback<T> {
-    // Único método que el desarrollador debe implementar: la parte variable.
-    T doInStatement(Statement stmt) throws SQLException, DataAccessException;
-}
-```
+Este fragmento muestra el esqueleto fijo del algoritmo tal como lo definió Spring: obtener la conexión, crear el `Statement`, aplicar su configuración, y liberar los recursos en el bloque `finally`, sin importar qué operación concreta se ejecute. La única línea que representa la parte variable del algoritmo es `action.doInStatement(stmt)`, donde se delega en el callback que el desarrollador implementó.
 
 ### 4.5 Principio SOLID asociado
 
