@@ -177,6 +177,11 @@ Captura de pantalla de historial de commits desde GitHub
 ![Historial de commits parte 1 y parte 2](historial_commit2.jpg)
 
 
+### Captura de pantalla del repositorio en GitHub con README renderizado y listado de archivos.
+
+
+![Captura de pantalla Final](Captura_Final.jpg)
+
 
 
 
