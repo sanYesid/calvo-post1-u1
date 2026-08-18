@@ -12,7 +12,7 @@ public class OrderProcessor {
     public double calculateTotal(List<Double> prices) {
         double subtotal = 0;
         for (double p : prices) subtotal += p;
-        return subtotal + (subtotal * taxRate);
+        return subtotal + (subtotal * taxRate); 
     }
 
     // Responsabilidad 2: descuentos (segundo algoritmo en la misma clase)
