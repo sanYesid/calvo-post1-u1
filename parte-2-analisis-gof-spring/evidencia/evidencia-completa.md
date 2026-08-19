@@ -24,7 +24,7 @@ Captura de pantalla que evidencia el historial de commits incrementales realizad
 ### 3. Salida de mvn exec:java
 Captura de pantalla que evidencia salida de mvn exec:java:
 
-![Salida de mvn exec:java](salida_mvn _exec_java.jpg)
+![Salida de mvn exec:java](salida_mvn_exec_java.jpg)
 
 ## 💻 Sección 2: Evidencias de la Parte 2 — Código Fuente de Spring Framework (GoF)
 
